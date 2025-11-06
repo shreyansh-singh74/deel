@@ -31,7 +31,7 @@ def similar_transactions(input_text: str, transactions: pd.DataFrame):
         transactions: DataFrame containing transaction data
         
     Returns:
-        dict: Dictionary with similar transactions and token count
+        dict: Dictionary with similar transactions (including actual embedding vectors) and token count
     """
     global _transaction_embeddings, _transaction_descriptions
     
@@ -51,13 +51,32 @@ def similar_transactions(input_text: str, transactions: pd.DataFrame):
     results = []
     for idx in sorted_indices[:5]:
         transaction_idx = idx.item()
+        # Get the actual embedding vector for this transaction (convert tensor to list)
+        transaction_embedding = _transaction_embeddings[transaction_idx].cpu().numpy().tolist()
+        
         results.append({
             "id": transactions.iloc[transaction_idx]["id"],
-            "embedding": float(cosine_scores[transaction_idx])
+            "embedding": transaction_embedding
         })
     
-    # Count tokens (simplified: word count)
-    total_tokens = len(input_text.split())
+    # Count tokens using the model's tokenizer (accurate token counting)
+    # Access tokenizer from the underlying transformer model
+    try:
+        # Try direct access (most common case)
+        tokenizer = model.tokenizer
+        tokens = tokenizer.tokenize(input_text)
+        total_tokens = len(tokens)
+    except AttributeError:
+        # Fallback: try accessing through the first module
+        try:
+            tokenizer = model[0].tokenizer
+            tokens = tokenizer.tokenize(input_text)
+            total_tokens = len(tokens)
+        except (AttributeError, IndexError):
+            # Final fallback: use encode and count tokens from the output
+            # Access through the first module's tokenizer
+            encoded = model[0].tokenizer.encode(input_text, add_special_tokens=True)
+            total_tokens = len(encoded)
     
     return {
         "transactions": results,
