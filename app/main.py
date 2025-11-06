@@ -74,5 +74,5 @@ def get_similar_transactions(request: SimilarTransactionsRequest):
 def health_check():
     """Health check endpoint."""
     return {"status": "healthy", "data_loaded": len(transactions) > 0 and len(users) > 0}
-
+ 
 

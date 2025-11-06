@@ -16,5 +16,3 @@ def load_data():
     users = pd.read_csv(users_path)
     
     return transactions, users
-
-
