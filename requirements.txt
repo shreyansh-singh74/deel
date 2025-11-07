@@ -10,4 +10,3 @@ transformers>=4.30.0
 unidecode>=1.3.7
 python-Levenshtein>=0.21.1
 numpy>=1.24.0
-
