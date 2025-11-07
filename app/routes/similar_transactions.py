@@ -31,7 +31,7 @@ def similar_transactions(input_text: str, transactions: pd.DataFrame):
         transactions: DataFrame containing transaction data
         
     Returns:
-        dict: Dictionary with similar transactions (including actual embedding vectors) and token count
+        dict: Dictionary with similar transactions (with similarity scores, without embeddings) and token count
     """
     global _transaction_embeddings, _transaction_descriptions
     
@@ -51,12 +51,12 @@ def similar_transactions(input_text: str, transactions: pd.DataFrame):
     results = []
     for idx in sorted_indices[:5]:
         transaction_idx = idx.item()
-        # Get the actual embedding vector for this transaction (convert tensor to list)
-        transaction_embedding = _transaction_embeddings[transaction_idx].cpu().numpy().tolist()
+        similarity_score = cosine_scores[idx].item()
         
         results.append({
             "id": transactions.iloc[transaction_idx]["id"],
-            "embedding": transaction_embedding
+            "description": transactions.iloc[transaction_idx]["description"],
+            "similarity_score": round(similarity_score, 4)
         })
     
     # Count tokens using the model's tokenizer (accurate token counting)
