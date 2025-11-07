@@ -74,12 +74,20 @@ The API will be available at `http://127.0.0.1:8000`
   "users": [
     {
       "id": "user_123",
-      "match_metric": 95
+      "name": "John Doe",
+      "match_metric": 95,
+      "method": "fuzzy"
     }
   ],
   "total_number_of_matches": 10
 }
 ```
+
+**Response Fields:**
+- `id`: User ID
+- `name`: User's full name
+- `match_metric`: Match score (0-100), where 100 is a perfect match
+- `method`: Matching method used (`"fuzzy"` or `"embedding"`)
 
 **Example:**
 ```bash
@@ -145,13 +153,34 @@ deel_ai_challenge/
 ├── app/
 │   ├── main.py                 # FastAPI application entry point
 │   ├── utils.py                # Data loading utilities
-│   ├── routes/
-│   │   ├── match_users.py      # User matching logic
-│   │   └── similar_transactions.py  # Similarity search logic
+│   ├── config/
+│   │   └── settings.py         # Centralized configuration
+│   ├── preprocessing/
+│   │   ├── user_processor.py   # User normalization and embedding
+│   │   └── text_cleaner.py     # Text cleaning utilities
+│   ├── matching/
+│   │   ├── candidate_extractor.py      # Name extraction
+│   │   ├── candidate_normalizer.py     # Variant generation
+│   │   ├── fuzzy_matcher.py            # Fuzzy matching
+│   │   ├── embedding_matcher.py        # Embedding matching
+│   │   ├── disambiguator.py            # Disambiguation logic
+│   │   ├── transliteration_map.py      # Non-Latin transliteration
+│   │   └── misspelling_map.py          # Common misspellings
+│   ├── observability/
+│   │   └── logger.py           # Request logging and metrics
+│   └── routes/
+│       ├── match_users.py      # User matching endpoint
+│       └── similar_transactions.py  # Similarity search logic
 │
 ├── data/
 │   ├── transactions.csv        # Transaction data
 │   └── users.csv               # User data
+│
+├── models/
+│   └── users_enriched.pkl      # Cached preprocessed users
+│
+├── tests/
+│   └── test_match_users.py     # Unit tests
 │
 ├── requirements.txt            # Python dependencies
 ├── README.md                   # This file
@@ -162,21 +191,58 @@ deel_ai_challenge/
 
 ### Task 1: Match Users by Transaction ID
 
-**Method Used:**
-- **Fuzzy String Matching** using `rapidfuzz` library (modern, fast alternative to fuzzywuzzy)
-- Uses `token_sort_ratio` for better matching with word order variations
-- Case-insensitive comparison
-- **Regex-based name extraction** from transaction descriptions
-- **Threshold filtering** (≥70 similarity score) to return only high-confidence matches
+**Hybrid Pipeline:**
+- **Fuzzy Matching (First Pass)**: Fast fuzzy string matching using `rapidfuzz` library
+- **Embedding Fallback**: Multilingual sentence embeddings for hard cases (non-Latin scripts, complex typos)
+- **Anchor-driven Extraction**: Intelligent name extraction from transaction descriptions
+- **Robust Normalization**: Handles typos, diacritics, glued words, reversed names, and more
 
-**How it works:**
-1. Retrieves the transaction by ID
-2. Extracts potential names from the transaction description using regex patterns:
-   - Handles patterns like "From <name>", "Transfer from <name>", "Received from <name>", "Payment from <name>", etc.
-   - Cleans extracted names (removes extra spaces, punctuation)
-3. Compares extracted names with all user names using fuzzy matching
-4. Filters matches above threshold (≥70) and sorts by match score (0-100 scale)
-5. Returns all matches above threshold with rounded match_metric (2 decimal places)
+**Pipeline Steps:**
+1. **Text Normalization**: Soft clean (for extraction) and hard clean (for fallback) of transaction descriptions
+2. **Candidate Extraction**: Anchor-driven extraction using patterns:
+   - After "from" anchor
+   - After "ref:" anchor
+   - Before "for deel" anchor
+   - Fallback: sliding windows for noisy text
+3. **Candidate Normalization**: Generate variants (reversed order, remove initials, drop digits, transliteration)
+4. **Fuzzy Matching**: Fast fuzzy matching with bonuses/penalties:
+   - Base score from multiple fuzzy metrics (token_sort_ratio, partial_ratio, jaro_winkler)
+   - Bonuses: +5 first-name overlap, +5 last-name overlap, +3 initials match
+   - Penalties: -8 if in CC region, -5 if near error markers
+   - Accept if top score ≥ 70
+5. **Embedding Fallback**: If fuzzy fails (<70), use multilingual embeddings:
+   - Transliteration for known non-Latin names (Chinese, Greek, Hebrew)
+   - Cosine similarity with precomputed user embeddings
+   - Accept if top cosine ≥ 0.75 (scaled to 0-100)
+6. **Disambiguation**: Apply anchor bonuses, CC penalties, prefer compound names
+7. **Output**: Return top 3-5 matches with method and score
+
+**Thresholds:**
+- Fuzzy accept: **≥ 70**
+- Embedding accept: **cosine ≥ 0.75** (scaled to 0-100)
+- Return top: **3-5 results**
+
+**Edge Cases Handled:**
+1. Noise/boilerplate removal
+2. Nonstandard name positions
+3. Typos and glued words
+4. Case variations
+5. Diacritics (é → e)
+6. Non-Latin scripts (Chinese, Greek, Hebrew) with transliteration
+7. Digits in names (0→o, 1→l, kelly01→kelly)
+8. Initials and suffixes (J., K, jr)
+9. Multi-person mentions (CC handling)
+10. Reversed name order (Fisher Victoria → Victoria Fisher)
+11. Compound/merged names (matthewbrooks → matthew brooks)
+12. Ambiguous "From for Deel" patterns
+13. Multiple candidates with same first names
+14. Translation vs transliteration
+15. Whitespace chaos
+16. Punctuation garbage
+17. Near-miss users
+18. Multiple name-like tokens
+19. Duplicate users (same name, different IDs)
+20. Blank/malformed user names
 
 ### Task 2: Find Similar Transactions
 
@@ -203,9 +269,11 @@ deel_ai_challenge/
    - In-memory similarity search may be slow for datasets with 100k+ transactions
 
 2. **Accuracy:**
-   - Fuzzy matching may not handle all edge cases (e.g., abbreviations, nicknames, non-English names)
-   - Semantic similarity depends on the quality of the pre-trained model
-   - Name extraction regex may miss some edge cases in transaction descriptions
+   - Handles 20+ edge cases including typos, non-Latin scripts, and noisy text
+   - Hybrid approach (fuzzy + embedding) provides good coverage
+   - Very uncommon transliterations outside the provided map might fall back to embeddings that are slightly less certain
+   - If names are fully absent from descriptions, the model returns empty
+   - Thresholds are tunable via configuration (config/settings.py)
 
 3. **Scalability:**
    - In-memory data storage (CSV files) - not suitable for production at scale
