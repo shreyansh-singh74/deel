@@ -227,7 +227,7 @@ curl -X POST "http://127.0.0.1:8000/similar_transactions" \
 
 ---
 
-## 📦 Requirements
+## Requirements
 
 See `requirements.txt` for full list. Key dependencies:
 
@@ -246,7 +246,7 @@ See `requirements.txt` for full list. Key dependencies:
 
 ---
 
-## 🧪 Testing
+## Testing
 
 ```bash
 # Run tests
@@ -259,7 +259,7 @@ pytest
 
 ---
 
-## 📚 Project Structure
+## Project Structure
 
 ```
 deel/
@@ -277,18 +277,12 @@ deel/
 
 ---
 
-## 💡 Quick Tips
+## Quick Tips
 
 - **Interactive Docs:** Visit `/docs` for Swagger UI with try-it-out functionality
 - **Health Check:** Use `/health` to verify server status
 - **Cache:** Preprocessed user embeddings are cached in `models/users_enriched.pkl`
 - **Configuration:** Adjust thresholds in `app/config/settings.py`
-
----
-
-## 📝 License
-
-MIT License
 
 ---
 
