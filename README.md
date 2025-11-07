@@ -1,8 +1,8 @@
-# 🚀 Deel AI Challenge - Transaction Matching API
+# Deel AI Challenge - Transaction Matching API
 
 A FastAPI-based REST API that matches users to transactions using fuzzy string matching and finds similar transactions using sentence embeddings. Built with FastAPI and Sentence Transformers.
 
-## 📋 Project Overview
+## Project Overview
 
 This project provides **2 API endpoints**:
 - `/match_users/{transaction_id}` - Matches users to transactions based on description similarity
@@ -12,7 +12,7 @@ This project provides **2 API endpoints**:
 
 ---
 
-## 🚀 Setup Instructions
+## Setup Instructions
 
 ### Step 1: Clone or Download the Repository
 
@@ -74,7 +74,7 @@ The server will start at `http://127.0.0.1:8000`
 
 ---
 
-## 📡 API Endpoints
+## API Endpoints
 
 ### 1. Match Users to Transaction
 
@@ -132,7 +132,7 @@ curl -X POST "http://127.0.0.1:8000/similar_transactions" \
 
 ---
 
-## 🔧 Approach / Methodology
+## Approach / Methodology
 
 ### Task 1: Match Users to Transactions
 
@@ -151,15 +151,15 @@ curl -X POST "http://127.0.0.1:8000/similar_transactions" \
    - Accepts matches with cosine similarity ≥ 0.75
 
 **Edge Cases Handled:**
-- ✅ Typos and misspellings
-- ✅ Non-Latin scripts (Chinese, Greek, Hebrew) with transliteration
-- ✅ Name order variations (Fisher Victoria → Victoria Fisher)
-- ✅ Glued words (matthewbrooks → matthew brooks)
-- ✅ Digits in names (kelly01 → kelly, 0→o, 1→l)
-- ✅ Multiple people (CC handling)
-- ✅ Noisy text and boilerplate removal
-- ✅ Case variations and diacritics
-- ✅ And 12+ more edge cases
+-  Typos and misspellings
+-  Non-Latin scripts (Chinese, Greek, Hebrew) with transliteration
+-  Name order variations (Fisher Victoria → Victoria Fisher)
+-  Glued words (matthewbrooks → matthew brooks)
+-  Digits in names (kelly01 → kelly, 0→o, 1→l)
+-  Multiple people (CC handling)
+-  Noisy text and boilerplate removal
+-  Case variations and diacritics
+-  And 12+ more edge cases
 
 ---
 
@@ -176,7 +176,7 @@ curl -X POST "http://127.0.0.1:8000/similar_transactions" \
 
 ---
 
-## ⚠️ Limitations
+## Limitations
 
 1. **Model Limitations:**
    - Small embedding model (MiniLM) may miss deeper semantic nuances
@@ -193,7 +193,7 @@ curl -X POST "http://127.0.0.1:8000/similar_transactions" \
 
 ---
 
-## 🚀 Future Improvements / Production Plan
+## Future Improvements / Production Plan
 
 ### Phase 1: Database & Storage
 - **Replace CSV with PostgreSQL** for scalable, concurrent data storage

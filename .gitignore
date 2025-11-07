@@ -8,3 +8,22 @@ venv/
 dist/
 build/
 
+# Auto-generated folders (don't push these)
+models/
+logs/
+
+# Environment variables
+.env
+.env.local
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
