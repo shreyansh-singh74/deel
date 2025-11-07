@@ -22,6 +22,10 @@ class UserPreprocessor:
         """
         self.embedding_model = embedding_model
         self.model_dim = None
+        # If model is provided, get its dimension
+        if self.embedding_model is not None:
+            test_embedding = self.embedding_model.encode(["test"])
+            self.model_dim = test_embedding.shape[1]
     
     @staticmethod
     def strip_accents(text: str) -> str:
@@ -100,6 +104,9 @@ class UserPreprocessor:
         if self.embedding_model is None:
             print(f"Loading embedding model: {config.EMBEDDING_MODEL}")
             self.embedding_model = SentenceTransformer(config.EMBEDDING_MODEL)
+        
+        # Ensure model_dim is set
+        if self.model_dim is None:
             # Get model dimension
             test_embedding = self.embedding_model.encode(["test"])
             self.model_dim = test_embedding.shape[1]
