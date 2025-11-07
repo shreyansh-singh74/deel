@@ -21,42 +21,58 @@ app = FastAPI(
 preprocessed_users = []
 user_embedding_model = None
 request_logger = None
-
-# Load data on startup
-transactions, users = load_data()
+transactions = None
+users = None
 
 # Initialize user preprocessing and embeddings on startup
 @app.on_event("startup")
 async def startup_event():
     """Initialize user preprocessing, embeddings, and transaction embeddings when the API starts."""
-    global preprocessed_users, user_embedding_model, request_logger
+    global preprocessed_users, user_embedding_model, request_logger, transactions, users
     
-    print("Initializing user preprocessing and embeddings...")
+    try:
+        # Load data
+        print("Loading data files...")
+        transactions, users = load_data()
+        print(f"Loaded {len(transactions)} transactions and {len(users)} users")
+    except Exception as e:
+        print(f"Error loading data: {e}")
+        print("Make sure data/transactions.csv and data/users.csv exist")
+        raise
     
-    # Load multilingual embedding model for user matching
-    print(f"Loading embedding model: {config.EMBEDDING_MODEL}")
-    user_embedding_model = SentenceTransformer(config.EMBEDDING_MODEL)
-    
-    # Initialize user preprocessor
-    user_processor = UserPreprocessor(embedding_model=user_embedding_model)
-    
-    # Preprocess users (load from cache if available)
-    cache_path = config.USER_ENRICHED_PKL
-    preprocessed_users = user_processor.preprocess_users(users, cache_path=cache_path)
-    
-    print(f"Preprocessed {len(preprocessed_users)} users")
-    print("User preprocessing completed!")
-    
-    # Initialize transaction embeddings
-    print("Initializing transaction embeddings...")
-    initialize_transaction_embeddings(transactions)
-    print("Transaction embeddings initialized!")
-    
-    # Initialize request logger
-    request_logger = RequestLogger(debug_mode=config.DEBUG_MODE)
-    print("Request logger initialized!")
-    
-    print("Startup complete!")
+    try:
+        print("Initializing user preprocessing and embeddings...")
+        
+        # Load multilingual embedding model for user matching
+        print(f"Loading embedding model: {config.EMBEDDING_MODEL}")
+        user_embedding_model = SentenceTransformer(config.EMBEDDING_MODEL)
+        print("Embedding model loaded successfully!")
+        
+        # Initialize user preprocessor
+        user_processor = UserPreprocessor(embedding_model=user_embedding_model)
+        
+        # Preprocess users (load from cache if available)
+        cache_path = config.USER_ENRICHED_PKL
+        preprocessed_users = user_processor.preprocess_users(users, cache_path=cache_path)
+        
+        print(f"Preprocessed {len(preprocessed_users)} users")
+        print("User preprocessing completed!")
+        
+        # Initialize transaction embeddings
+        print("Initializing transaction embeddings...")
+        initialize_transaction_embeddings(transactions)
+        print("Transaction embeddings initialized!")
+        
+        # Initialize request logger
+        request_logger = RequestLogger(debug_mode=config.DEBUG_MODE)
+        print("Request logger initialized!")
+        
+        print("✅ Startup complete!")
+    except Exception as e:
+        print(f"❌ Error during startup: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
 
 # Request model for similar_transactions endpoint
 class SimilarTransactionsRequest(BaseModel):
@@ -84,6 +100,12 @@ def get_matched_users(transaction_id: str):
     Returns:
         JSON response with matched users
     """
+    if transactions is None or users is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Service not ready: data not loaded"
+        )
+    
     if not preprocessed_users or user_embedding_model is None:
         raise HTTPException(
             status_code=503,
@@ -114,6 +136,12 @@ def get_similar_transactions(request: SimilarTransactionsRequest):
     Returns:
         JSON response with similar transactions
     """
+    if transactions is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Service not ready: data not loaded"
+        )
+    
     result = similar_transactions(request.query, transactions)
     return JSONResponse(content=result)
 
@@ -121,8 +149,8 @@ def get_similar_transactions(request: SimilarTransactionsRequest):
 def health_check():
     """Health check endpoint."""
     return {
-        "status": "healthy",
-        "data_loaded": len(transactions) > 0 and len(users) > 0,
+        "status": "healthy" if (transactions is not None and users is not None) else "loading",
+        "data_loaded": transactions is not None and users is not None and len(transactions) > 0 and len(users) > 0,
         "users_preprocessed": len(preprocessed_users) > 0,
         "embedding_model_loaded": user_embedding_model is not None
     }
