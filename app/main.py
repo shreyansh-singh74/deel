@@ -9,13 +9,8 @@ from app.preprocessing.user_processor import UserPreprocessor
 from app.observability.logger import RequestLogger
 from pydantic import BaseModel
 import os
-
-# Initialize FastAPI app
-app = FastAPI(
-    title="Deel AI Challenge API",
-    description="API for matching users to transactions and finding similar transactions",
-    version="1.0.0"
-)
+import asyncio
+from contextlib import asynccontextmanager
 
 # Global variables for preprocessed data
 preprocessed_users = []
@@ -23,12 +18,11 @@ user_embedding_model = None
 request_logger = None
 transactions = None
 users = None
+startup_complete = False
 
-# Initialize user preprocessing and embeddings on startup
-@app.on_event("startup")
-async def startup_event():
-    """Initialize user preprocessing, embeddings, and transaction embeddings when the API starts."""
-    global preprocessed_users, user_embedding_model, request_logger, transactions, users
+async def startup_task():
+    """Background task to initialize models - doesn't block server startup."""
+    global preprocessed_users, user_embedding_model, request_logger, transactions, users, startup_complete
     
     try:
         # Load data
@@ -38,7 +32,7 @@ async def startup_event():
     except Exception as e:
         print(f"Error loading data: {e}")
         print("Make sure data/transactions.csv and data/users.csv exist")
-        raise
+        return
     
     try:
         print("Initializing user preprocessing and embeddings...")
@@ -67,12 +61,30 @@ async def startup_event():
         request_logger = RequestLogger(debug_mode=config.DEBUG_MODE)
         print("Request logger initialized!")
         
+        startup_complete = True
         print("✅ Startup complete!")
     except Exception as e:
         print(f"❌ Error during startup: {e}")
         import traceback
         traceback.print_exc()
-        raise
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager - starts background task for model loading."""
+    # Start background task for model loading - server starts immediately
+    task = asyncio.create_task(startup_task())
+    yield
+    # Cleanup if needed
+    if not task.done():
+        task.cancel()
+
+# Initialize FastAPI app with lifespan
+app = FastAPI(
+    title="Deel AI Challenge API",
+    description="API for matching users to transactions and finding similar transactions",
+    version="1.0.0",
+    lifespan=lifespan
+)
 
 # Request model for similar_transactions endpoint
 class SimilarTransactionsRequest(BaseModel):
@@ -100,6 +112,14 @@ def get_matched_users(transaction_id: str):
     Returns:
         JSON response with matched users
     """
+    global startup_complete
+    
+    if not startup_complete:
+        raise HTTPException(
+            status_code=503,
+            detail="Service is still initializing. Please try again in a few moments."
+        )
+    
     if transactions is None or users is None:
         raise HTTPException(
             status_code=503,
@@ -136,6 +156,14 @@ def get_similar_transactions(request: SimilarTransactionsRequest):
     Returns:
         JSON response with similar transactions
     """
+    global startup_complete
+    
+    if not startup_complete:
+        raise HTTPException(
+            status_code=503,
+            detail="Service is still initializing. Please try again in a few moments."
+        )
+    
     if transactions is None:
         raise HTTPException(
             status_code=503,
@@ -147,10 +175,30 @@ def get_similar_transactions(request: SimilarTransactionsRequest):
 
 @app.get("/health")
 def health_check():
-    """Health check endpoint."""
-    return {
-        "status": "healthy" if (transactions is not None and users is not None) else "loading",
-        "data_loaded": transactions is not None and users is not None and len(transactions) > 0 and len(users) > 0,
-        "users_preprocessed": len(preprocessed_users) > 0,
-        "embedding_model_loaded": user_embedding_model is not None
-    }
+    """Health check endpoint - must respond quickly for Railway."""
+    global startup_complete
+    try:
+        is_ready = (
+            startup_complete
+            and transactions is not None 
+            and users is not None 
+            and len(transactions) > 0 
+            and len(users) > 0
+            and len(preprocessed_users) > 0
+            and user_embedding_model is not None
+        )
+        # Always return 200 for health check - Railway uses this to determine if server is up
+        return {
+            "status": "healthy" if is_ready else "loading",
+            "data_loaded": transactions is not None and users is not None and len(transactions) > 0 and len(users) > 0,
+            "users_preprocessed": len(preprocessed_users) > 0,
+            "embedding_model_loaded": user_embedding_model is not None,
+            "startup_complete": startup_complete
+        }
+    except Exception as e:
+        # Still return 200 for health check even on error
+        return {
+            "status": "error",
+            "error": str(e),
+            "startup_complete": startup_complete
+        }

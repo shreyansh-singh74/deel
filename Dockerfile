@@ -37,5 +37,6 @@ ENV PYTHONDONTWRITEBYTECODE=1
 #     CMD python -c "import requests; requests.get('http://localhost:$PORT/health')" || exit 1
 
 # Start the application
-CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
+# Railway sets PORT dynamically - use shell form to access env var
+CMD uvicorn app.main:app --host 0.0.0.0 --port $PORT
 
